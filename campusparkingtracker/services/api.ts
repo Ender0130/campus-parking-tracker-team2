@@ -1,7 +1,7 @@
 // ─── Central API config ────────────────────────────────────────────────────
 // Change this to your machine's LAN IP when testing on a physical device.
 // "localhost" only works in iOS Simulator / Android Emulator.
-export const API_BASE = "http://192.168.0.113:5001";
+export const API_BASE = "http://127.0.0.1:5001";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 export type LotStatus = "AVAILABLE" | "LIMITED" | "FULL";
