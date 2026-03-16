@@ -43,9 +43,18 @@ cd CampusParkingTracker/campusparkingtracker
 npm install
 ```
 
+### API Installation
+
+```bash
+git clone https://github.com/devbycarlos/campus-parking-backend.git
+cd campus-parking-backend
+
+```
+
 ### Running the App
 
 ```bash
+RUN API FIRST
 # Start Expo dev server
 npm start
 
@@ -54,6 +63,15 @@ npm run ios
 
 # Run on Android
 npm run android
+```
+
+### Running the API
+
+```bash
+# Start API server
+cd campus-parking-backend
+python3 api.py
+
 ```
 
 ## Project Structure
