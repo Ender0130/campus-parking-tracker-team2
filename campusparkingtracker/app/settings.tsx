@@ -23,13 +23,15 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
 const PRIMARY = "#4F46E5";
 
-const CAMPUSES = ["SDSU"];
+const CAMPUSES = ["SDSU", "UCSD", "CSUSM"];
 const CAMPUS_LABELS: Record<string, string> = {
   SDSU: "SDSU - San Diego State University",
+  UCSD: "UCSD - University of California San Diego",
+  CSUSM: "CSUSM - California State University San Marcos",
 };
 
 const COMMUNITIES = [
@@ -156,11 +158,29 @@ export default function Settings() {
   });
 
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    campus?: string | string[];
+    community?: string | string[];
+  }>();
+
+  const initialCampus =
+    typeof params.campus === "string"
+      ? params.campus
+      : Array.isArray(params.campus)
+        ? params.campus[0]
+        : "SDSU";
+
+  const initialCommunity =
+    typeof params.community === "string"
+      ? params.community
+      : Array.isArray(params.community)
+        ? params.community[0]
+        : "Aztec Corner";
 
   const [name, setName] = useState("John Aztec");
   const [email, setEmail] = useState("");
-  const [campus, setCampus] = useState("SDSU");
-  const [community, setCommunity] = useState("Aztec Corner");
+  const [campus, setCampus] = useState(initialCampus);
+  const [community, setCommunity] = useState(initialCommunity);
   const [notifications, setNotifications] = useState(true);
   const [spotAlerts, setSpotAlerts] = useState(true);
   const [highTrafficAlerts, setHighTrafficAlerts] = useState(true);
@@ -180,7 +200,6 @@ export default function Settings() {
       resizeMode="cover"
     >
       <SafeAreaView style={styles.safe} edges={["top"]}>
-
         {/* ── Header ── */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
@@ -196,7 +215,6 @@ export default function Settings() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-
           {/* ── Profile Hero ── */}
           <View style={styles.profileHero}>
             <View style={styles.avatarRing}>
@@ -443,7 +461,7 @@ export default function Settings() {
 
             <View style={styles.aboutRow}>
               <Text style={styles.rowLabel}>Made for</Text>
-              <Text style={styles.aboutValue}>SDSU Community</Text>
+              <Text style={styles.aboutValue}>{campus} Community</Text>
             </View>
 
             <Divider />
@@ -515,8 +533,7 @@ export default function Settings() {
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
 
-          <Text style={styles.footerNote}>CampusPark · SDSU Edition · v1.0.0</Text>
-
+          <Text style={styles.footerNote}>CampusPark · {campus} Edition · v1.0.0</Text>
         </ScrollView>
       </SafeAreaView>
     </ImageBackground>
