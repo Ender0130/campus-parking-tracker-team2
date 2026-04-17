@@ -5,6 +5,7 @@ const extra = Constants.expoConfig?.extra ?? {};
 export const API_BASE = extra.apiBaseUrl || "http://10.130.21.36:5001";
 
 // Types
+export type CampusCode = "SDSU" | "UCSD" | "CSUSM";
 export type LotStatus = "AVAILABLE" | "LIMITED" | "FULL";
 
 export type Lot = {
@@ -16,7 +17,7 @@ export type Lot = {
 };
 
 export type ReportPayload = {
-  campus: string;
+  campus: CampusCode;
   lot_name: string;
   status: LotStatus;
   reporter: string;
@@ -31,9 +32,11 @@ export type ReportResponse = {
 };
 
 // Fetch all lots from the backend
-export async function fetchLots(campus: string): Promise<Lot[]> {
+export async function fetchLots(campus: CampusCode): Promise<Lot[]> {
   const res = await fetch(`${API_BASE}/lots?campus=${encodeURIComponent(campus)}`);
-  if (!res.ok) throw new Error(`GET /lots failed: ${res.status}`);
+  if (!res.ok) {
+    throw new Error(`GET /lots failed: ${res.status}`);
+  }
   return res.json();
 }
 
