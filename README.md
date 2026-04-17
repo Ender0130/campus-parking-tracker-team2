@@ -40,7 +40,7 @@ A mobile app that helps college students find and track parking on campus — bu
 ### Installation
 
 ```bash
-git clone https://github.com/angelbalp/campus-parking-tracker.git
+git clone https://github.com/Ender0130/campus-parking-tracker-team2.git
 cd CampusParkingTracker/campusparkingtracker
 npm install
 ```
@@ -48,7 +48,7 @@ npm install
 ### API Installation
 
 ```bash
-git clone https://github.com/devbycarlos/campus-parking-backend.git
+git clone https://github.com/Ender0130/Campus-Parking-Backend-team2.git
 cd campus-parking-backend
 
 ```
