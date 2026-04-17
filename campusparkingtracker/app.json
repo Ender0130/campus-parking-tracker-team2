@@ -42,9 +42,13 @@
         }
       ]
     ],
+    "extra": {
+  "apiBaseUrl": "http://10.130.48.83:5001"
+},
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     }
   }
+  
 }
