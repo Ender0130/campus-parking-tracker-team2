@@ -2,7 +2,7 @@ import Constants from "expo-constants";
 
 // Central API config
 const extra = Constants.expoConfig?.extra ?? {};
-export const API_BASE = extra.apiBaseUrl || "http://127.0.0.1:5001";
+export const API_BASE = extra.apiBaseUrl || "http://10.130.21.36:5001";
 
 // Types
 export type LotStatus = "AVAILABLE" | "LIMITED" | "FULL";
