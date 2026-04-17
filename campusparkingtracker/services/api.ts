@@ -16,6 +16,7 @@ export type Lot = {
 };
 
 export type ReportPayload = {
+  campus: string;
   lot_name: string;
   status: LotStatus;
   reporter: string;
@@ -30,8 +31,8 @@ export type ReportResponse = {
 };
 
 // Fetch all lots from the backend
-export async function fetchLots(): Promise<Lot[]> {
-  const res = await fetch(`${API_BASE}/lots`);
+export async function fetchLots(campus: string): Promise<Lot[]> {
+  const res = await fetch(`${API_BASE}/lots?campus=${encodeURIComponent(campus)}`);
   if (!res.ok) throw new Error(`GET /lots failed: ${res.status}`);
   return res.json();
 }
