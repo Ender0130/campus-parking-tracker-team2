@@ -1,8 +1,22 @@
 import Constants from "expo-constants";
 
-// Central API config
 const extra = Constants.expoConfig?.extra ?? {};
-export const API_BASE = extra.apiBaseUrl || "http://10.130.21.36:5001";
+const configuredBaseUrl =
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? extra.apiBaseUrl ?? "";
+
+function getApiBaseUrl(): string {
+  const apiBaseUrl = configuredBaseUrl.trim().replace(/\/+$/, "");
+
+  if (!apiBaseUrl) {
+    throw new Error(
+      "Missing API base URL. Set EXPO_PUBLIC_API_BASE_URL to your backend URL, for example http://192.168.1.50:5001"
+    );
+  }
+
+  return apiBaseUrl;
+}
+
+export const API_BASE = getApiBaseUrl();
 
 // Types
 export type CampusCode = "SDSU" | "UCSD" | "CSUSM";
