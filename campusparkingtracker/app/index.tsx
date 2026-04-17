@@ -23,9 +23,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const PRIMARY = "#4F46E5";
 
-const CAMPUSES = ["SDSU"];
+const CAMPUSES = ["SDSU", "UCSD", "CSUSM"];
 const CAMPUS_LABELS: Record<string, string> = {
   SDSU: "SDSU - San Diego State University",
+  UCSD: "UCSD - University of California San Diego",
+  CSUSM: "CSUSM - California State University San Marcos",
 };
 
 const COMMUNITIES = [
@@ -97,7 +99,7 @@ function Dropdown({ placeholder, options, selected, onSelect, getLabel }: Dropdo
         activeOpacity={0.7}
       >
         <Text style={selected ? styles.dropdownText : styles.dropdownPlaceholder}>
-          {selected || placeholder}
+          {selected ? (getLabel ? getLabel(selected) : selected) : placeholder}
         </Text>
         <Text style={styles.chevron}>▾</Text>
       </TouchableOpacity>
@@ -170,7 +172,6 @@ export default function Index() {
       resizeMode="cover"
     >
       <SafeAreaView style={styles.safe}>
-
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.titleRow}>
@@ -211,12 +212,19 @@ export default function Index() {
             ]}
             activeOpacity={0.85}
             disabled={!campus || !community}
-            onPress={() => router.push("/home")}
+            onPress={() =>
+              router.push({
+                pathname: "/home",
+                params: {
+                  campus,
+                  community,
+                },
+              })
+            }
           >
             <Text style={styles.loginBtnText}>Log in</Text>
           </TouchableOpacity>
         </View>
-
       </SafeAreaView>
     </ImageBackground>
   );
