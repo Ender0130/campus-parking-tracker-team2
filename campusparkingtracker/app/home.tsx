@@ -7,7 +7,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/poppins";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Animated,
@@ -43,10 +43,12 @@ function statusLabel(status: LotStatus): string {
 // ─── Report Modal ────────────────────────────────────────────────────────────
 function ReportModal({
   lot,
+  campus,
   onClose,
   onReported,
 }: {
   lot: Lot | null;
+  campus: string;
   onClose: () => void;
   /** Called with the updated lot data after a successful report */
   onReported: (updated: Partial<Lot>) => void;
@@ -98,16 +100,16 @@ function ReportModal({
         }),
       ]).start();
     }
-  }, [visible]);
+  }, [visible, backdropAnim, sheetAnim]);
 
   if (!lot) return null;
 
   /** Map user actions → a status string the backend understands */
   function deriveStatus(): LotStatus {
-    if (infoWrong) return "FULL";   // flag as full when reporting wrong info
-    if (left) return "AVAILABLE";   // someone left → more space
-    if (arrived) return "LIMITED";  // someone arrived → less space
-    return lot!.status;             // no change
+    if (infoWrong) return "FULL";
+    if (left) return "AVAILABLE";
+    if (arrived) return "LIMITED";
+    return lot.status;
   }
 
   async function handleSubmit() {
@@ -121,9 +123,10 @@ function ReportModal({
 
     try {
       const result = await submitReport({
-        lot_name: lot!.name,
+        campus,
+        lot_name: lot.name,
         status: deriveStatus(),
-        reporter: "anonymous",   // swap with real user ID / auth token
+        reporter: "anonymous",
       });
 
       if (result.success) {
@@ -150,13 +153,14 @@ function ReportModal({
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose}>
-          <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: backdropAnim }]} />
+          <Animated.View
+            style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: backdropAnim }]}
+          />
         </TouchableOpacity>
 
         <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetAnim }] }]}>
           <View style={styles.sheetHandle} />
 
-          {/* Sheet header */}
           <View style={styles.sheetHeader}>
             <View style={{ flex: 1 }}>
               <Text style={styles.sheetTitle}>{lot.name}</Text>
@@ -172,12 +176,14 @@ function ReportModal({
 
           <View style={styles.sheetDivider} />
 
-          {/* Arrived / Left buttons */}
           <View style={styles.fieldRow}>
             <TouchableOpacity
               style={[styles.actionBtn, arrived && styles.actionBtnActive]}
               activeOpacity={0.75}
-              onPress={() => { setArrived((v) => !v); setLeft(false); }}
+              onPress={() => {
+                setArrived((v) => !v);
+                setLeft(false);
+              }}
             >
               <Ionicons
                 name={arrived ? "checkmark-circle" : "enter-outline"}
@@ -192,7 +198,10 @@ function ReportModal({
             <TouchableOpacity
               style={[styles.actionBtn, left && styles.actionBtnLeftActive]}
               activeOpacity={0.75}
-              onPress={() => { setLeft((v) => !v); setArrived(false); }}
+              onPress={() => {
+                setLeft((v) => !v);
+                setArrived(false);
+              }}
             >
               <Ionicons
                 name={left ? "checkmark-circle" : "exit-outline"}
@@ -205,7 +214,6 @@ function ReportModal({
             </TouchableOpacity>
           </View>
 
-          {/* Report wrong info */}
           <TouchableOpacity
             style={[styles.reportToggle, infoWrong && styles.reportToggleActive]}
             activeOpacity={0.75}
@@ -222,12 +230,8 @@ function ReportModal({
             </Text>
           </TouchableOpacity>
 
-          {/* Error message */}
-          {submitError && (
-            <Text style={styles.errorText}>{submitError}</Text>
-          )}
+          {submitError && <Text style={styles.errorText}>{submitError}</Text>}
 
-          {/* Submit */}
           <TouchableOpacity
             style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
             activeOpacity={0.85}
@@ -238,7 +242,12 @@ function ReportModal({
               <ActivityIndicator color="#fff" size="small" />
             ) : (
               <>
-                <Ionicons name="checkmark-circle" size={18} color="#fff" style={{ marginRight: 8 }} />
+                <Ionicons
+                  name="checkmark-circle"
+                  size={18}
+                  color="#fff"
+                  style={{ marginRight: 8 }}
+                />
                 <Text style={styles.submitText}>Submit</Text>
               </>
             )}
@@ -260,38 +269,63 @@ export default function Home() {
   });
 
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    campus?: string | string[];
+    community?: string | string[];
+  }>();
+
+  const campus =
+    typeof params.campus === "string"
+      ? params.campus
+      : Array.isArray(params.campus)
+        ? params.campus[0]
+        : "SDSU";
+
+  const community =
+    typeof params.community === "string"
+      ? params.community
+      : Array.isArray(params.community)
+        ? params.community[0]
+        : "";
+
   const [lots, setLots] = useState<Lot[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Lot | null>(null);
 
-  const loadLots = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setFetchError(null);
+  const loadLots = useCallback(
+    async (isRefresh = false) => {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
 
-    try {
-      const data = await fetchLots();
-      setLots(data);
-    } catch (e) {
-      setFetchError("Could not load parking data. Check your connection.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+      setFetchError(null);
 
-  // Initial load
-  useEffect(() => { loadLots(); }, [loadLots]);
+      try {
+        const data = await fetchLots(campus as any);
+        setLots(data);
+      } catch (e) {
+        setFetchError("Could not load parking data. Check your connection.");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [campus]
+  );
 
-  // Auto-refresh every 60 seconds
+  useEffect(() => {
+    loadLots();
+  }, [loadLots]);
+
   useEffect(() => {
     const interval = setInterval(() => loadLots(true), 60_000);
     return () => clearInterval(interval);
   }, [loadLots]);
 
-  /** Patch a single lot in state after a user report */
   function handleReported(lotName: string, updated: Partial<Lot>) {
     setLots((prev) =>
       prev.map((l) => (l.name === lotName ? { ...l, ...updated } : l))
@@ -308,28 +342,48 @@ export default function Home() {
       resizeMode="cover"
     >
       <SafeAreaView style={styles.safe} edges={["top"]}>
-        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.heading}>SDSU Parking Lots</Text>
+          <Text style={styles.heading}>{campus} Parking Lots</Text>
           <View style={styles.headerActions}>
             <View>
-              <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7} onPress={() => router.push("/alerts")}>
+              <TouchableOpacity
+                style={styles.iconBtn}
+                activeOpacity={0.7}
+                onPress={() => router.push("/alerts")}
+              >
                 <Ionicons name="notifications-outline" size={20} color="#1a1a2e" />
               </TouchableOpacity>
               <View style={styles.notifBadge}>
                 <Text style={styles.notifBadgeText}>4</Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7} onPress={() => router.push("/history")}>
+
+            <TouchableOpacity
+              style={styles.iconBtn}
+              activeOpacity={0.7}
+              onPress={() => router.push("/history")}
+            >
               <Ionicons name="time-outline" size={20} color="#1a1a2e" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7} onPress={() => router.push("/settings")}>
+
+            <TouchableOpacity
+              style={styles.iconBtn}
+              activeOpacity={0.7}
+              onPress={() =>
+                router.push({
+                  pathname: "/settings",
+                  params: {
+                    campus,
+                    community,
+                  },
+                })
+              }
+            >
               <Ionicons name="settings-outline" size={20} color="#1a1a2e" />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Loading state */}
         {loading && !refreshing && (
           <View style={styles.centered}>
             <ActivityIndicator size="large" color={PRIMARY} />
@@ -337,7 +391,6 @@ export default function Home() {
           </View>
         )}
 
-        {/* Error state */}
         {!loading && fetchError && (
           <View style={styles.centered}>
             <Ionicons name="cloud-offline-outline" size={40} color="#6B7280" />
@@ -348,7 +401,6 @@ export default function Home() {
           </View>
         )}
 
-        {/* Lots list */}
         {!loading && !fetchError && (
           <ScrollView
             style={styles.scroll}
@@ -382,7 +434,8 @@ export default function Home() {
                   </View>
 
                   <Text style={styles.cardMeta}>
-                    {lot.total_spots} total spots · Updated {new Date(lot.last_updated).toLocaleTimeString()}
+                    {lot.total_spots} total spots · Updated{" "}
+                    {new Date(lot.last_updated).toLocaleTimeString()}
                   </Text>
                 </TouchableOpacity>
               );
@@ -393,6 +446,7 @@ export default function Home() {
 
       <ReportModal
         lot={selected}
+        campus={campus}
         onClose={() => setSelected(null)}
         onReported={(updated) => {
           if (selected) handleReported(selected.name, updated);
@@ -407,7 +461,6 @@ const styles = StyleSheet.create({
   backgroundImage: { opacity: 0.75 },
   safe: { flex: 1 },
 
-  // ── Header ──────────────────────────────────────────
   header: {
     paddingHorizontal: 20,
     paddingTop: 14,
@@ -456,7 +509,6 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
 
-  // ── States ───────────────────────────────────────────
   centered: {
     flex: 1,
     alignItems: "center",
@@ -487,7 +539,6 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
 
-  // ── Scroll ───────────────────────────────────────────
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 20,
@@ -496,7 +547,6 @@ const styles = StyleSheet.create({
     gap: 14,
   },
 
-  // ── Card ─────────────────────────────────────────────
   card: {
     backgroundColor: "rgba(255,255,255,0.82)",
     borderRadius: 16,
@@ -545,7 +595,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
-  // ── Report Modal ──────────────────────────────────────
   overlay: {
     flex: 1,
     justifyContent: "flex-end",
