@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState } from "react";
 
 type User = { username: string };
 
@@ -11,8 +11,7 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const LOCAL_USERS: Record<string, string> = {
-  carter: 'password123',
-  guest: 'guest',
+  guest: "guest",
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -35,6 +34,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
   return ctx;
 }

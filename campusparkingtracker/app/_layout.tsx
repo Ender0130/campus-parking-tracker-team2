@@ -1,17 +1,36 @@
 import { LogBox } from "react-native";
-import { Stack } from "expo-router";
+import { Stack, Redirect, useSegments } from "expo-router";
+import { AuthProvider, useAuth } from "../context/AuthContext";
 
 LogBox.ignoreLogs(["Snapshotting a view"]);
 
+function RootLayoutNav() {
+  const { user } = useAuth();
+  const segments = useSegments();
+
+  const inLoginScreen = segments[0] === "login";
+
+  if (!user && !inLoginScreen) {
+    return <Redirect href="/login" />;
+  }
+
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="login" />
+      <Stack.Screen name="index" />
+      <Stack.Screen name="home" />
+      <Stack.Screen name="alerts" />
+      <Stack.Screen name="history" />
+      <Stack.Screen name="legal" />
+      <Stack.Screen name="settings" />
+    </Stack>
+  );
+}
+
 export default function RootLayout() {
   return (
-    <Stack>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="home" options={{ headerShown: false }} />
-      <Stack.Screen name="alerts" options={{ headerShown: false }} />
-      <Stack.Screen name="history" options={{ headerShown: false }} />
-      <Stack.Screen name="legal" options={{ headerShown: false }} />
-      <Stack.Screen name="settings" options={{ headerShown: false }} />
-    </Stack>
+    <AuthProvider>
+      <RootLayoutNav />
+    </AuthProvider>
   );
 }
