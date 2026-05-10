@@ -26,7 +26,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { ApiError, fetchLots, submitReport, Lot, LotStatus } from "../services/api";
 
 const PRIMARY = "#4F46E5";
-const REPORTER = "anonymous";
 const REPORT_REWARD = 5;
 
 const FALLBACK_LOTS_BY_CAMPUS: Record<string, string[]> = {
@@ -150,7 +149,6 @@ function ReportModal({
         campus,
         lot_name: currentLot.name,
         status: deriveStatus(),
-        reporter: "anonymous",
       });
 
       if (result.success) {
@@ -162,7 +160,7 @@ function ReportModal({
         setSubmitError(result.error ?? "Something went wrong.");
       }
     } catch (e) {
-      setSubmitError("Network error — check your connection.");
+      setSubmitError(e instanceof Error ? e.message : "Network error. Check your connection.");
     } finally {
       setSubmitting(false);
     }
@@ -312,7 +310,6 @@ function LockedReportCard({
         campus,
         lot_name: selectedLotName,
         status: selectedStatus,
-        reporter: REPORTER,
       });
 
       if (result.success) {
@@ -325,7 +322,7 @@ function LockedReportCard({
         setMessage(result.error ?? "Could not submit report.");
       }
     } catch (e) {
-      setMessage("Could not submit report. Check your connection.");
+      setMessage(e instanceof Error ? e.message : "Could not submit report. Check your connection.");
     } finally {
       setSubmitting(false);
     }
@@ -481,7 +478,7 @@ export default function Home() {
       setFetchError(null);
 
       try {
-        const data = await fetchLots(campus, REPORTER);
+        const data = await fetchLots(campus);
         setLots(data.lots ?? []);
         setPoints(data.points ?? 0);
         setLocked(false);
@@ -493,7 +490,7 @@ export default function Home() {
           setFetchError(null);
         } else {
           setLocked(false);
-          setFetchError("Could not load parking data. Check your connection.");
+          setFetchError(e instanceof Error ? e.message : "Could not load parking data. Check your connection.");
         }
       } finally {
         setLoading(false);

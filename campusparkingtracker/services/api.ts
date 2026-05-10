@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { supabase } from "../lib/supabase";
 
 const extra = Constants.expoConfig?.extra ?? {};
 
@@ -30,7 +31,7 @@ export type ReportPayload = {
   campus: CampusCode;
   lot_name: string;
   status: LotStatus;
-  reporter: string;
+  reporter?: string;
 };
 
 export type ReportResponse = {
@@ -41,6 +42,16 @@ export type ReportResponse = {
   status?: LotStatus;
   color?: string;
   last_updated?: string;
+  error?: string;
+};
+
+export type MeResponse = {
+  success: boolean;
+  user?: {
+    id: string;
+    email?: string;
+  };
+  points?: number;
   error?: string;
 };
 
@@ -56,27 +67,82 @@ export class ApiError extends Error {
   }
 }
 
-export async function fetchLots(
-  campus: CampusCode,
-  reporter: string
-): Promise<LotsResponse> {
-  const url = `${API_BASE}/lots?campus=${encodeURIComponent(
-    campus
-  )}&reporter=${encodeURIComponent(reporter)}`;
+async function getAccessToken() {
+  const { data, error } = await supabase.auth.getSession();
 
-  const res = await fetch(url);
-  const data = await res.json();
-
-  if (!res.ok) {
-    throw new ApiError(
-      data.error || `GET /lots failed: ${res.status}`,
-      res.status,
-      data.points
-    );
+  if (error) {
+    throw new ApiError(error.message, 401);
   }
 
-  // Supports both old backend shape: Lot[]
-  // and new points backend shape: { lots, points }
+  const token = data.session?.access_token;
+
+  if (!token) {
+    throw new ApiError("You are not signed in.", 401);
+  }
+
+  return token;
+}
+
+async function parseJsonResponse(res: Response) {
+  const text = await res.text();
+
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text };
+  }
+}
+
+async function apiFetch(path: string, options: RequestInit = {}) {
+  const token = await getAccessToken();
+  const headers = new Headers(options.headers);
+
+  headers.set("Authorization", `Bearer ${token}`);
+
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+  });
+
+  const data = await parseJsonResponse(res);
+
+  if (!res.ok) {
+    const detailParts = [
+      data.details,
+      data.remote_details,
+      data.fallback_details,
+    ].filter(Boolean);
+
+    const baseMessage =
+      data.error || `${options.method || "GET"} ${path} failed: ${res.status}`;
+
+    const fullMessage = detailParts.length
+      ? `${baseMessage} Details: ${detailParts.join(" | ")}`
+      : baseMessage;
+
+    throw new ApiError(fullMessage, res.status, data.points);
+  }
+
+  return data;
+}
+
+export async function fetchMe(): Promise<MeResponse> {
+  return apiFetch("/me");
+}
+
+export async function fetchLots(
+  campus: CampusCode,
+  _reporter?: string
+): Promise<LotsResponse> {
+  const url = `/lots?campus=${encodeURIComponent(campus)}`;
+  const data = await apiFetch(url);
+
   if (Array.isArray(data)) {
     return {
       success: true,
@@ -91,21 +157,8 @@ export async function fetchLots(
 export async function submitReport(
   payload: ReportPayload
 ): Promise<ReportResponse> {
-  const res = await fetch(`${API_BASE}/report`, {
+  return apiFetch("/report", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    throw new ApiError(
-      data.error || `POST /report failed: ${res.status}`,
-      res.status,
-      data.points
-    );
-  }
-
-  return data;
 }

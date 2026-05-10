@@ -1,1 +1,16 @@
-EXPO_PUBLIC_API_BASE_URL=http://YOUR_BACKEND_HOST:5001
+# Frontend Expo app env file.
+# Copy this file to .env and replace the placeholder values.
+
+# Web/simulator backend URL:
+EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:5001
+
+# Supabase project URL from Project Settings -> API.
+EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+
+# Supabase publishable key from Project Settings -> API Keys.
+# If your dashboard only shows legacy anon public, use that value here.
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY
+
+# Optional. For Expo web, set this to the exact page users return to after email confirmation.
+# Add this exact URL, plus http://localhost:8081/**, in Supabase Authentication -> URL Configuration.
+EXPO_PUBLIC_AUTH_REDIRECT_URL=http://localhost:8081/login

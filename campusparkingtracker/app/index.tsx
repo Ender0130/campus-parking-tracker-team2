@@ -222,7 +222,7 @@ export default function Index() {
               })
             }
           >
-            <Text style={styles.loginBtnText}>Log in</Text>
+            <Text style={styles.loginBtnText}>Continue</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>

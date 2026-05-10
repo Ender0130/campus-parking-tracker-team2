@@ -24,6 +24,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useAuth } from "../context/AuthContext";
 
 const PRIMARY = "#4F46E5";
 
@@ -158,6 +159,7 @@ export default function Settings() {
   });
 
   const router = useRouter();
+  const { user, logout } = useAuth();
   const params = useLocalSearchParams<{
     campus?: string | string[];
     community?: string | string[];
@@ -177,8 +179,8 @@ export default function Settings() {
         ? params.community[0]
         : "Aztec Corner";
 
-  const [name, setName] = useState("John Aztec");
-  const [email, setEmail] = useState("");
+  const [name, setName] = useState(user?.email?.split("@")[0] || "Campus Parker");
+  const [email, setEmail] = useState(user?.email ?? "");
   const [campus, setCampus] = useState(initialCampus);
   const [community, setCommunity] = useState(initialCommunity);
   const [notifications, setNotifications] = useState(true);
@@ -527,7 +529,10 @@ export default function Settings() {
           <TouchableOpacity
             style={styles.signOutBtn}
             activeOpacity={0.82}
-            onPress={() => router.replace("/")}
+            onPress={async () => {
+              await logout();
+              router.replace("/login");
+            }}
           >
             <Ionicons name="log-out-outline" size={18} color="#EF4444" style={{ marginRight: 10 }} />
             <Text style={styles.signOutText}>Sign Out</Text>
