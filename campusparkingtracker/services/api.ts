@@ -1,25 +1,14 @@
 import Constants from "expo-constants";
 
 const extra = Constants.expoConfig?.extra ?? {};
-const configuredBaseUrl =
-  process.env.EXPO_PUBLIC_API_BASE_URL ?? extra.apiBaseUrl ?? "";
 
-function getApiBaseUrl(): string {
-  const apiBaseUrl = configuredBaseUrl.trim().replace(/\/+$/, "");
+export const API_BASE =
+  process.env.EXPO_PUBLIC_API_BASE_URL ||
+  extra.apiBaseUrl ||
+  "http://127.0.0.1:5001";
 
-  if (!apiBaseUrl) {
-    throw new Error(
-      "Missing API base URL. Set EXPO_PUBLIC_API_BASE_URL to your backend URL, for example http://192.168.1.50:5001"
-    );
-  }
+export type CampusCode = "SDSU" | string;
 
-  return apiBaseUrl;
-}
-
-export const API_BASE = getApiBaseUrl();
-
-// Types
-export type CampusCode = "SDSU" | "UCSD" | "CSUSM";
 export type LotStatus = "AVAILABLE" | "LIMITED" | "FULL";
 
 export type Lot = {
@@ -28,6 +17,13 @@ export type Lot = {
   color: string;
   last_updated: string;
   total_spots: number;
+};
+
+export type LotsResponse = {
+  success?: boolean;
+  points?: number;
+  lots?: Lot[];
+  error?: string;
 };
 
 export type ReportPayload = {
@@ -39,22 +35,59 @@ export type ReportPayload = {
 
 export type ReportResponse = {
   success: boolean;
+  campus?: string;
+  points?: number;
+  lot?: Lot;
   status?: LotStatus;
   color?: string;
   last_updated?: string;
   error?: string;
 };
 
-// Fetch all lots from the backend
-export async function fetchLots(campus: CampusCode): Promise<Lot[]> {
-  const res = await fetch(`${API_BASE}/lots?campus=${encodeURIComponent(campus)}`);
-  if (!res.ok) {
-    throw new Error(`GET /lots failed: ${res.status}`);
+export class ApiError extends Error {
+  status: number;
+  points?: number;
+
+  constructor(message: string, status: number, points?: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.points = points;
   }
-  return res.json();
 }
 
-// Submit a crowd-sourced availability report
+export async function fetchLots(
+  campus: CampusCode,
+  reporter: string
+): Promise<LotsResponse> {
+  const url = `${API_BASE}/lots?campus=${encodeURIComponent(
+    campus
+  )}&reporter=${encodeURIComponent(reporter)}`;
+
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new ApiError(
+      data.error || `GET /lots failed: ${res.status}`,
+      res.status,
+      data.points
+    );
+  }
+
+  // Supports both old backend shape: Lot[]
+  // and new points backend shape: { lots, points }
+  if (Array.isArray(data)) {
+    return {
+      success: true,
+      lots: data,
+      points: undefined,
+    };
+  }
+
+  return data;
+}
+
 export async function submitReport(
   payload: ReportPayload
 ): Promise<ReportResponse> {
@@ -64,5 +97,15 @@ export async function submitReport(
     body: JSON.stringify(payload),
   });
 
-  return res.json();
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new ApiError(
+      data.error || `POST /report failed: ${res.status}`,
+      res.status,
+      data.points
+    );
+  }
+
+  return data;
 }

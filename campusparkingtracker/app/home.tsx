@@ -23,9 +23,32 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { fetchLots, submitReport, Lot, LotStatus } from "../services/api";
+import { ApiError, fetchLots, submitReport, Lot, LotStatus } from "../services/api";
 
 const PRIMARY = "#4F46E5";
+const REPORTER = "anonymous";
+const REPORT_REWARD = 5;
+
+const FALLBACK_LOTS_BY_CAMPUS: Record<string, string[]> = {
+  SDSU: [
+    "Parking Lot 1",
+    "Parking Lot 2B",
+    "Parking Lot 2C",
+    "Parking Lot 3",
+    "Parking Lot 4",
+    "Parking Lot 12",
+    "Parking Lot 15",
+    "Parking Lot 17",
+    "Parking Lot 17A",
+    "Parking Lot 17B",
+  ],
+  UCSD: [
+    "Gilman Parking Structure",
+    "Hopkins Parking Structure",
+    "Pangea Parking Structure",
+  ],
+  CSUSM: ["Lot B", "Lot C", "Parking Structure 1"],
+};
 
 // ─── Derive UI helpers from backend status string ───────────────────────────
 function statusColor(status: LotStatus): string {
@@ -103,13 +126,14 @@ function ReportModal({
   }, [visible, backdropAnim, sheetAnim]);
 
   if (!lot) return null;
+  const currentLot = lot;
 
   /** Map user actions → a status string the backend understands */
   function deriveStatus(): LotStatus {
     if (infoWrong) return "FULL";
     if (left) return "AVAILABLE";
     if (arrived) return "LIMITED";
-    return lot.status;
+    return currentLot.status;
   }
 
   async function handleSubmit() {
@@ -124,17 +148,15 @@ function ReportModal({
     try {
       const result = await submitReport({
         campus,
-        lot_name: lot.name,
+        lot_name: currentLot.name,
         status: deriveStatus(),
         reporter: "anonymous",
       });
 
       if (result.success) {
-        onReported({
-          status: result.status,
-          color: result.color,
-          last_updated: result.last_updated,
-        });
+        if (result.lot) {
+          onReported(result.lot);
+        }
         onClose();
       } else {
         setSubmitError(result.error ?? "Something went wrong.");
@@ -146,8 +168,8 @@ function ReportModal({
     }
   }
 
-  const color = statusColor(lot.status);
-  const label = statusLabel(lot.status);
+  const color = statusColor(currentLot.status);
+  const label = statusLabel(currentLot.status);
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
@@ -163,7 +185,7 @@ function ReportModal({
 
           <View style={styles.sheetHeader}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.sheetTitle}>{lot.name}</Text>
+              <Text style={styles.sheetTitle}>{currentLot.name}</Text>
               <Text style={styles.sheetSubtitle}>
                 Last updated: {new Date(lot.last_updated).toLocaleTimeString()}
               </Text>
@@ -258,6 +280,158 @@ function ReportModal({
   );
 }
 
+
+// ─── Locked report card ─────────────────────────────────────────────────────
+function LockedReportCard({
+  campus,
+  points,
+  onPointsChanged,
+  onUnlocked,
+}: {
+  campus: string;
+  points: number;
+  onPointsChanged: (points: number) => void;
+  onUnlocked: () => void;
+}) {
+  const lotNames = FALLBACK_LOTS_BY_CAMPUS[campus] ?? FALLBACK_LOTS_BY_CAMPUS.SDSU;
+  const [selectedLotName, setSelectedLotName] = useState(lotNames[0]);
+  const [selectedStatus, setSelectedStatus] = useState<LotStatus>("LIMITED");
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedLotName(lotNames[0]);
+  }, [campus, lotNames]);
+
+  async function handleEarnPoints() {
+    setSubmitting(true);
+    setMessage(null);
+
+    try {
+      const result = await submitReport({
+        campus,
+        lot_name: selectedLotName,
+        status: selectedStatus,
+        reporter: REPORTER,
+      });
+
+      if (result.success) {
+        if (result.points !== undefined) {
+          onPointsChanged(result.points);
+        }
+        setMessage(`Report submitted. You earned ${REPORT_REWARD} points.`);
+        onUnlocked();
+      } else {
+        setMessage(result.error ?? "Could not submit report.");
+      }
+    } catch (e) {
+      setMessage("Could not submit report. Check your connection.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const statusOptions: { label: string; value: LotStatus; icon: keyof typeof Ionicons.glyphMap }[] = [
+    { label: "Available", value: "AVAILABLE", icon: "checkmark-circle-outline" },
+    { label: "Limited", value: "LIMITED", icon: "alert-circle-outline" },
+    { label: "Full", value: "FULL", icon: "close-circle-outline" },
+  ];
+
+  return (
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.lockCard}>
+        <View style={styles.lockIconCircle}>
+          <Ionicons name="lock-closed-outline" size={28} color={PRIMARY} />
+        </View>
+
+        <Text style={styles.lockTitle}>Parking data is locked</Text>
+        <Text style={styles.lockBody}>
+          Submit a quick parking report to earn points. After you earn points, the app will unlock the live parking list.
+        </Text>
+
+        <View style={styles.pointsPillLarge}>
+          <Ionicons name="sparkles-outline" size={16} color={PRIMARY} />
+          <Text style={styles.pointsPillText}>Current points: {points}</Text>
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.formLabel}>1. Which lot are you reporting?</Text>
+        <View style={styles.choiceWrap}>
+          {lotNames.map((lotName) => (
+            <TouchableOpacity
+              key={lotName}
+              style={[
+                styles.choiceChip,
+                selectedLotName === lotName && styles.choiceChipActive,
+              ]}
+              activeOpacity={0.75}
+              onPress={() => setSelectedLotName(lotName)}
+            >
+              <Text
+                style={[
+                  styles.choiceChipText,
+                  selectedLotName === lotName && styles.choiceChipTextActive,
+                ]}
+              >
+                {lotName}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={[styles.formLabel, { marginTop: 18 }]}>2. What did you see?</Text>
+        <View style={styles.statusChoiceColumn}>
+          {statusOptions.map((option) => {
+            const active = selectedStatus === option.value;
+            const color = statusColor(option.value);
+
+            return (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.statusChoice,
+                  active && { borderColor: color, backgroundColor: color + "18" },
+                ]}
+                activeOpacity={0.75}
+                onPress={() => setSelectedStatus(option.value)}
+              >
+                <Ionicons name={option.icon} size={20} color={color} />
+                <Text style={[styles.statusChoiceText, active && { color }]}>
+                  {option.label}
+                </Text>
+                {active && <Ionicons name="checkmark" size={18} color={color} />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {message && <Text style={styles.infoText}>{message}</Text>}
+
+        <TouchableOpacity
+          style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
+          activeOpacity={0.85}
+          onPress={handleEarnPoints}
+          disabled={submitting}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <>
+              <Ionicons name="add-circle" size={18} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.submitText}>Submit Report (+{REPORT_REWARD} points)</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+}
+
 // ─── Home screen ─────────────────────────────────────────────────────────────
 export default function Home() {
   const [fontsLoaded] = useFonts({
@@ -293,6 +467,8 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Lot | null>(null);
+  const [points, setPoints] = useState(0);
+  const [locked, setLocked] = useState(false);
 
   const loadLots = useCallback(
     async (isRefresh = false) => {
@@ -305,10 +481,20 @@ export default function Home() {
       setFetchError(null);
 
       try {
-        const data = await fetchLots(campus as any);
-        setLots(data);
+        const data = await fetchLots(campus, REPORTER);
+        setLots(data.lots ?? []);
+        setPoints(data.points ?? 0);
+        setLocked(false);
       } catch (e) {
-        setFetchError("Could not load parking data. Check your connection.");
+        if (e instanceof ApiError && e.status === 403) {
+          setLocked(true);
+          setLots([]);
+          setPoints(e.points ?? 0);
+          setFetchError(null);
+        } else {
+          setLocked(false);
+          setFetchError("Could not load parking data. Check your connection.");
+        }
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -344,6 +530,9 @@ export default function Home() {
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
           <Text style={styles.heading}>{campus} Parking Lots</Text>
+          <Text style={{ fontSize: 14, color: "#6B7280" }}>
+            Points: {points}
+          </Text>
           <View style={styles.headerActions}>
             <View>
               <TouchableOpacity
@@ -391,7 +580,7 @@ export default function Home() {
           </View>
         )}
 
-        {!loading && fetchError && (
+        {!loading && fetchError && !locked && (
           <View style={styles.centered}>
             <Ionicons name="cloud-offline-outline" size={40} color="#6B7280" />
             <Text style={styles.errorStateText}>{fetchError}</Text>
@@ -401,7 +590,16 @@ export default function Home() {
           </View>
         )}
 
-        {!loading && !fetchError && (
+        {!loading && locked && (
+          <LockedReportCard
+            campus={campus}
+            points={points}
+            onPointsChanged={setPoints}
+            onUnlocked={() => loadLots(true)}
+          />
+        )}
+
+        {!loading && !fetchError && !locked && (
           <ScrollView
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
@@ -414,6 +612,13 @@ export default function Home() {
               />
             }
           >
+            <View style={styles.unlockHintCard}>
+              <Ionicons name="information-circle-outline" size={18} color={PRIMARY} />
+              <Text style={styles.unlockHintText}>
+                Viewing this list costs 1 point. Submit reports to keep earning points.
+              </Text>
+            </View>
+
             {lots.map((lot) => {
               const color = statusColor(lot.status);
               const label = statusLabel(lot.status);
@@ -450,6 +655,7 @@ export default function Home() {
         onClose={() => setSelected(null)}
         onReported={(updated) => {
           if (selected) handleReported(selected.name, updated);
+          loadLots(true);
         }}
       />
     </ImageBackground>
@@ -595,6 +801,132 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
+
+  lockCard: {
+    backgroundColor: "rgba(255,255,255,0.88)",
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.95)",
+    padding: 22,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  lockIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#EEF2FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  lockTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 18,
+    color: "#1a1a2e",
+    textAlign: "center",
+  },
+  lockBody: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 20,
+    marginTop: 8,
+  },
+  pointsPillLarge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#EEF2FF",
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginTop: 16,
+  },
+  pointsPillText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 13,
+    color: PRIMARY,
+  },
+  unlockHintCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(255,255,255,0.78)",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.9)",
+  },
+  unlockHintText: {
+    flex: 1,
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  formLabel: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 14,
+    color: "#1a1a2e",
+    marginBottom: 10,
+  },
+  choiceWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  choiceChip: {
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    backgroundColor: "rgba(255,255,255,0.72)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  choiceChipActive: {
+    borderColor: PRIMARY,
+    backgroundColor: "#EEF2FF",
+  },
+  choiceChipText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  choiceChipTextActive: {
+    color: PRIMARY,
+  },
+  statusChoiceColumn: {
+    gap: 10,
+  },
+  statusChoice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    backgroundColor: "rgba(255,255,255,0.72)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  statusChoiceText: {
+    flex: 1,
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 13,
+    color: "#4B5563",
+  },
+  infoText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: "#4B5563",
+    textAlign: "center",
+    marginTop: 14,
+  },
   overlay: {
     flex: 1,
     justifyContent: "flex-end",
