@@ -66,12 +66,18 @@ function statusLabel(status: LotStatus): string {
 function ReportModal({
   lot,
   campus,
+  arrivedLot,
   onClose,
+  onArrived,
+  onLeft,
   onReported,
 }: {
   lot: Lot | null;
   campus: string;
+  arrivedLot: string | null;
   onClose: () => void;
+  onArrived: (lotName: string) => void;
+  onLeft: () => void;
   /** Called with the updated lot data after a successful report */
   onReported: (updated: Partial<Lot>) => void;
 }) {
@@ -197,41 +203,72 @@ function ReportModal({
           <View style={styles.sheetDivider} />
 
           <View style={styles.fieldRow}>
-            <TouchableOpacity
-              style={[styles.actionBtn, arrived && styles.actionBtnActive]}
-              activeOpacity={0.75}
-              onPress={() => {
-                setArrived((v) => !v);
-                setLeft(false);
-              }}
-            >
-              <Ionicons
-                name={arrived ? "checkmark-circle" : "enter-outline"}
-                size={20}
-                color={arrived ? "#fff" : PRIMARY}
-              />
-              <Text style={[styles.actionBtnText, arrived && styles.actionBtnTextActive]}>
-                {arrived ? "Arrived ✓" : "I Arrived"}
-              </Text>
-            </TouchableOpacity>
+            {/* No active arrival lock: user can mark this lot as arrived. */}
+            {!arrivedLot && !left && (
+              <TouchableOpacity
+                style={[styles.actionBtn, arrived && styles.actionBtnActive]}
+                activeOpacity={0.75}
+                onPress={() => {
+                  const nextArrived = !arrived;
 
-            <TouchableOpacity
-              style={[styles.actionBtn, left && styles.actionBtnLeftActive]}
-              activeOpacity={0.75}
-              onPress={() => {
-                setLeft((v) => !v);
-                setArrived(false);
-              }}
-            >
-              <Ionicons
-                name={left ? "checkmark-circle" : "exit-outline"}
-                size={20}
-                color={left ? "#fff" : "#6B7280"}
-              />
-              <Text style={[styles.actionBtnText, left && styles.actionBtnTextActive]}>
-                {left ? "Left ✓" : "I Left"}
-              </Text>
-            </TouchableOpacity>
+                  setArrived(nextArrived);
+                  setLeft(false);
+
+                  if (nextArrived) {
+                    // Start the 5-minute lock immediately, before Submit.
+                    onArrived(currentLot.name);
+                  } else {
+                    // If they unselect Arrived before submitting, clear the lock.
+                    onLeft();
+                  }
+                }}
+              >
+                <Ionicons
+                  name={arrived ? "checkmark-circle" : "enter-outline"}
+                  size={20}
+                  color={arrived ? "#fff" : PRIMARY}
+                />
+                <Text style={[styles.actionBtnText, arrived && styles.actionBtnTextActive]}>
+                  {arrived ? "Arrived ✓" : "I Arrived"}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Active arrival lock for this same lot: user can only say they left. */}
+            {(arrivedLot === currentLot.name || left) && (
+              <TouchableOpacity
+                style={[styles.actionBtn, left && styles.actionBtnLeftActive]}
+                activeOpacity={0.75}
+                onPress={() => {
+                  const nextLeft = !left;
+
+                  setLeft(nextLeft);
+                  setArrived(false);
+
+                  if (nextLeft) {
+                    // Clear the 5-minute lock immediately.
+                    onLeft();
+                  }
+                }}
+              >
+                <Ionicons
+                  name={left ? "checkmark-circle" : "exit-outline"}
+                  size={20}
+                  color={left ? "#fff" : "#6B7280"}
+                />
+                <Text style={[styles.actionBtnText, left && styles.actionBtnTextActive]}>
+                  {left ? "Left ✓" : "I Left"}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Active arrival lock for another lot: block this lot. */}
+            {arrivedLot && arrivedLot !== currentLot.name && (
+              <View style={[styles.actionBtn, styles.actionBtnDisabled]}>
+                <Ionicons name="lock-closed-outline" size={20} color="#D1D5DB" />
+                <Text style={[styles.actionBtnText, { color: "#9CA3AF" }]}>Already Parked</Text>
+              </View>
+            )}
           </View>
 
           <TouchableOpacity
@@ -466,6 +503,8 @@ export default function Home() {
   const [selected, setSelected] = useState<Lot | null>(null);
   const [points, setPoints] = useState(0);
   const [locked, setLocked] = useState(false);
+  const [arrivedLot, setArrivedLot] = useState<string | null>(null);
+  const [arrivedAt, setArrivedAt] = useState<number | null>(null);
 
   const loadLots = useCallback(
     async (isRefresh = false) => {
@@ -503,6 +542,28 @@ export default function Home() {
   useEffect(() => {
     loadLots();
   }, [loadLots]);
+
+  // Clear the arrival lock automatically after 5 minutes.
+  useEffect(() => {
+    if (!arrivedAt) return;
+
+    const fiveMinutes = 5 * 60 * 1000;
+    const elapsed = Date.now() - arrivedAt;
+    const remaining = fiveMinutes - elapsed;
+
+    if (remaining <= 0) {
+      setArrivedLot(null);
+      setArrivedAt(null);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setArrivedLot(null);
+      setArrivedAt(null);
+    }, remaining);
+
+    return () => clearTimeout(timer);
+  }, [arrivedAt]);
 
   useEffect(() => {
     const interval = setInterval(() => loadLots(true), 60_000);
@@ -649,7 +710,16 @@ export default function Home() {
       <ReportModal
         lot={selected}
         campus={campus}
+        arrivedLot={arrivedLot}
         onClose={() => setSelected(null)}
+        onArrived={(lotName) => {
+          setArrivedLot(lotName);
+          setArrivedAt(Date.now());
+        }}
+        onLeft={() => {
+          setArrivedLot(null);
+          setArrivedAt(null);
+        }}
         onReported={(updated) => {
           if (selected) handleReported(selected.name, updated);
           loadLots(true);
@@ -991,6 +1061,10 @@ const styles = StyleSheet.create({
   actionBtnLeftActive: {
     backgroundColor: "#6B7280",
     borderColor: "#6B7280",
+  },
+  actionBtnDisabled: {
+    backgroundColor: "#F3F4F6",
+    borderColor: "#E5E7EB",
   },
   actionBtnText: {
     fontFamily: "Poppins_600SemiBold",
