@@ -78,8 +78,8 @@ function ReportModal({
   onClose: () => void;
   onArrived: (lotName: string) => void;
   onLeft: () => void;
-  /** Called with the updated lot data after a successful report */
-  onReported: (updated: Partial<Lot>) => void;
+  /** Called with the updated lot data and points after a successful report */
+  onReported: (updated: Partial<Lot>, points?: number) => void;
 }) {
   const backdropAnim = useRef(new Animated.Value(0)).current;
   const sheetAnim = useRef(new Animated.Value(400)).current;
@@ -159,7 +159,7 @@ function ReportModal({
 
       if (result.success) {
         if (result.lot) {
-          onReported(result.lot);
+          onReported(result.lot, result.points);
         }
         onClose();
       } else {
@@ -588,9 +588,10 @@ export default function Home() {
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
           <Text style={styles.heading}>{campus} Parking Lots</Text>
-          <Text style={{ fontSize: 14, color: "#6B7280" }}>
-            Points: {points}
-          </Text>
+          <View style={styles.pointsPillTop}>
+            <Ionicons name="sparkles-outline" size={14} color={PRIMARY} />
+            <Text style={styles.pointsPillTopText}>{points}</Text>
+          </View>
           <View style={styles.headerActions}>
             <View>
               <TouchableOpacity
@@ -673,7 +674,7 @@ export default function Home() {
             <View style={styles.unlockHintCard}>
               <Ionicons name="information-circle-outline" size={18} color={PRIMARY} />
               <Text style={styles.unlockHintText}>
-                Viewing this list costs 1 point. Submit reports to keep earning points.
+                You need at least 1 point to view live parking data. Submit reports to keep earning points.
               </Text>
             </View>
 
@@ -720,8 +721,9 @@ export default function Home() {
           setArrivedLot(null);
           setArrivedAt(null);
         }}
-        onReported={(updated) => {
+        onReported={(updated, nextPoints) => {
           if (selected) handleReported(selected.name, updated);
+          if (nextPoints !== undefined) setPoints(nextPoints);
           loadLots(true);
         }}
       />
@@ -748,6 +750,24 @@ const styles = StyleSheet.create({
     color: "#1a1a2e",
     letterSpacing: 0.2,
     flex: 1,
+  },
+  pointsPillTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(238,242,255,0.92)",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(79,70,229,0.18)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginHorizontal: 8,
+  },
+  pointsPillTopText: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 13,
+    color: PRIMARY,
+    lineHeight: 16,
   },
   headerActions: {
     flexDirection: "row",
